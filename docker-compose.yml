@@ -1,0 +1,31 @@
+# Local testing — runs the production image exactly as it will run on Render.
+# For the self-hosted deployment (Caddy + TLS + a domain), see
+# backend/docker-compose.yml instead.
+#
+#   docker compose up --build            → http://localhost:8000, no login
+#   AUTH_USERNAME=me AUTH_PASSWORD=pw docker compose up --build   → with login
+services:
+  app:
+    container_name: vqe-local
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      # HOST_PORT=8001 docker compose up   if something already holds 8000.
+      - "${HOST_PORT:-8000}:8000"
+    environment:
+      # Empty by default: the app runs open and logs a warning, which is what
+      # you want locally. Set both to exercise the basic-auth path.
+      AUTH_USERNAME: ${AUTH_USERNAME:-}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+    # Mirrors Render's starter plan so a memory regression fails here rather
+    # than in production. Steady state is ~334 MiB; see the root README.
+    mem_limit: 512m
+    healthcheck:
+      # No curl in python:3.12-slim, and /api/health is deliberately public.
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s

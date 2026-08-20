@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets — never commit these
+.env
+.env.local
+backend/.env
+frontend/.env.local
+
+# Node / Next
+node_modules/
+.next/
+
+# Editors / OS
+.idea/
+.DS_Store
+
+# Build artifacts
+frontend/out/
+backend/static/
