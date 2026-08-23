@@ -83,6 +83,36 @@ Two things are load-bearing:
 
 ## Deploying
 
+### Streamlit Community Cloud (free)
+
+No code changes needed — `streamlit_app.py` and `requirements.txt` are already
+at the repo root where it expects them.
+
+1. Push to GitHub (private repos are fine).
+2. share.streamlit.io → **Create app** → pick the repo, main file `streamlit_app.py`.
+3. Set the Python version to **3.12 or 3.13** — `qiskit-aer` ships manylinux
+   x86_64 wheels for both, so nothing has to compile.
+4. Either restrict who can open the app via the viewer allow-list (real
+   identity auth, and then you can skip the password entirely), **or** paste
+   this into the app's Secrets box:
+
+   ```toml
+   APP_PASSWORD = "your-password"
+   ```
+
+   Root-level secrets are also exposed as environment variables, so
+   `os.environ.get("APP_PASSWORD")` in `streamlit_app.py` picks it up unchanged.
+
+Fits comfortably: ~1 GB per app against this app's 351 MB peak. Two caveats —
+idle apps sleep, so the first interaction after a gap re-imports everything and
+rebuilds the fake backends; and the free tier allows only one *private* app.
+
+For local secrets, put the same TOML in `.streamlit/secrets.toml` — it is
+gitignored.
+
+### Render (paid, always-on)
+
+Use this if the sleeping or shared-CPU throttling gets annoying.
 [`render.yaml`](render.yaml) defines the whole app as one Render service.
 
 1. Push to GitHub.

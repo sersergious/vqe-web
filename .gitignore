@@ -6,6 +6,9 @@ __pycache__/
 # Secrets — never commit these
 .env
 .env.local
+# Streamlit Cloud reads secrets from its dashboard; this is the local equivalent
+# and must never be committed.
+.streamlit/secrets.toml
 
 # Editors / OS
 .idea/
