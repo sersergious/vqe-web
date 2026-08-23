@@ -55,7 +55,7 @@ from that entry's parameter specs, so there is no UI change.
 
 ## Performance notes
 
-1–2 qubit scenarios, measured natively:
+1–2 qubit scenarios, measured inside the container under a hard 512 MB cap:
 
 | | |
 |---|---|
@@ -63,7 +63,13 @@ from that entry's parameter specs, so there is no UI change.
 | Histogram, heaviest scenario | ~5s |
 | Landscape, 24 points | ~7s |
 | Landscape, 120 points | ~35s |
-| Memory, one fake backend warm | ~279 MB |
+| Memory — streamlit + vqe_app imported | 190 MB |
+| Memory — all 9 scenarios warm | 255 MB |
+| Memory — **peak**, worst case | **351 MB** |
+| Memory — live server, typical session | ~219 MB |
+
+"Worst case" is every scenario warm plus the heaviest histogram and a 120-point
+sweep. It fits Render's 512 MB starter plan with ~160 MB to spare.
 
 Two things are load-bearing:
 

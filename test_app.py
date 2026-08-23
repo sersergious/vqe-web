@@ -7,6 +7,8 @@ app inside a 512 MB instance, and a smoke test that the Streamlit page runs.
 Run:  python test_app.py
 """
 
+import os
+
 from vqe_app import scenarios as sc
 
 # One per family: scalar / pair / pair+coefficient / 2-qubit.
@@ -123,6 +125,29 @@ def test_app_switches_scenarios():
     assert not app.exception, app.exception
 
 
+def test_password_gate():
+    """With APP_PASSWORD set, nothing renders until the right password is given."""
+    from streamlit.testing.v1 import AppTest
+
+    os.environ["APP_PASSWORD"] = "s3cret"
+    try:
+        app = AppTest.from_file("streamlit_app.py", default_timeout=180)
+        app.run()
+        assert not app.exception, app.exception
+        assert app.text_input, "expected a password prompt"
+        assert not app.sidebar.selectbox, "app must stay hidden until unlocked"
+
+        app.text_input[0].input("wrong").run()
+        assert app.error, "a wrong password must show an error"
+        assert not app.sidebar.selectbox, "app must stay hidden after a bad password"
+
+        app.text_input[0].input("s3cret").run()
+        assert not app.exception, app.exception
+        assert app.sidebar.selectbox, "correct password must reveal the app"
+    finally:
+        os.environ.pop("APP_PASSWORD", None)
+
+
 if __name__ == "__main__":
     test_registry()
     test_fake_simulators_are_shared()
@@ -132,5 +157,6 @@ if __name__ == "__main__":
     print("\nrendering the Streamlit page…")
     test_app_renders()
     test_app_switches_scenarios()
-    print("app renders, switches scenarios, and loads optimal params")
+    test_password_gate()
+    print("app renders, switches scenarios, loads optimal params, gates on password")
     print("\nAll checks passed.")
