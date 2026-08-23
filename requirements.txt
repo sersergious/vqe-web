@@ -1,0 +1,9 @@
+# Versions match vqe/environment.yml so the app runs the same stack as the scripts.
+qiskit==2.1.2
+qiskit-aer==0.17.2
+qiskit-ibm-runtime==0.41.1
+numpy==2.3.3
+scipy==1.16.2
+matplotlib==3.10.6
+
+streamlit==1.62.0

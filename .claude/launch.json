@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
-      "port": 3000
+      "name": "streamlit",
+      "runtimeExecutable": ".venv/bin/streamlit",
+      "runtimeArgs": ["run", "streamlit_app.py", "--server.port", "8501"],
+      "port": 8501
     }
   ]
 }

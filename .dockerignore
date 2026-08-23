@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.next/
+frontend/
+backend/
+.git/
+.idea/
+.DS_Store
+*.png

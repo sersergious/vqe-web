@@ -1,0 +1,9 @@
+# Pinned dark so the matplotlib figures in vqe_app/charts.py match the page.
+[theme]
+base = "dark"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

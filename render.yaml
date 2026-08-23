@@ -1,24 +1,21 @@
-# Render Blueprint — one service serving the API and the frontend.
+# Render Blueprint — one service, one container.
 # Create it from the Render dashboard: New > Blueprint, point at this repo.
 services:
   - type: web
     name: vqe-explorer
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: .
-    # Measured in this image under a hard 512 MB cap: ~307 MB idle, plateauing at
-    # ~334 MB after repeatedly cycling all 9 scenarios plus a 120-point sweep.
-    # That headroom depends on the shared fake-backend simulators in
-    # app/scenarios.py — without them this OOM-kills (see test_api.py).
+    # Measured under a hard 512 MB cap: steady state ~330 MB after exercising
+    # every scenario. That headroom depends on the shared fake-backend
+    # simulators in vqe_app/scenarios.py — without them this OOM-kills, which
+    # test_app.py guards against.
     # Do NOT drop to the free plan: it spins down when idle, and every wake-up
-    # rebuilds the fake backends and re-pays the ~60s image start.
+    # rebuilds the fake backends.
     plan: starter
-    healthCheckPath: /api/health
+    healthCheckPath: /_stcore/health
     envVars:
-      # sync: false means Render prompts for these at deploy time rather than
-      # reading them from this file — so credentials never land in git, and the
-      # service cannot go live unprotected by accident.
-      - key: AUTH_USERNAME
-        sync: false
-      - key: AUTH_PASSWORD
+      # sync: false means Render prompts at deploy time, so the password never
+      # lands in git and the service cannot go live unprotected by accident.
+      - key: APP_PASSWORD
         sync: false
