@@ -10,8 +10,9 @@ services:
     # every scenario. That headroom depends on the shared fake-backend
     # simulators in vqe_app/scenarios.py — without them this OOM-kills, which
     # test_app.py guards against.
-    # Do NOT drop to the free plan: it spins down when idle, and every wake-up
-    # rebuilds the fake backends.
+    # Prefer this over the free plan, which spins down when idle. The app's own
+    # wake cost is small (~1s to import, ~0.7s to build a fake backend); what
+    # you actually wait for is the platform re-provisioning the container.
     plan: starter
     healthCheckPath: /_stcore/health
     envVars:

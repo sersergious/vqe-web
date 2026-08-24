@@ -103,9 +103,15 @@ at the repo root where it expects them.
    Root-level secrets are also exposed as environment variables, so
    `os.environ.get("APP_PASSWORD")` in `streamlit_app.py` picks it up unchanged.
 
-Fits comfortably: ~1 GB per app against this app's 351 MB peak. Two caveats —
-idle apps sleep, so the first interaction after a gap re-imports everything and
-rebuilds the fake backends; and the free tier allows only one *private* app.
+Fits comfortably: ~1 GB per app against this app's 351 MB peak.
+
+Two caveats. Idle apps sleep, and Streamlit is a single process — the page is
+served by the same container that runs the simulations, so there is no static
+frontend that stays up while the compute sleeps. A visitor to a sleeping app
+gets Streamlit's own "app is asleep" interstitial and a button to wake it. The
+app's share of that wake is small (~1s to import, ~0.7s for the first 2-qubit
+scenario); the wait is the platform re-provisioning the container. Second: the
+free tier allows only one *private* app.
 
 For local secrets, put the same TOML in `.streamlit/secrets.toml` — it is
 gitignored.
@@ -120,5 +126,6 @@ Use this if the sleeping or shared-CPU throttling gets annoying.
 3. It prompts for `APP_PASSWORD` (declared `sync: false`, so it never lands in
    git and the service cannot go live unprotected by accident).
 
-Stay on `starter`, not `free`: free instances spin down when idle, and every
-wake-up rebuilds the fake backends. Render health-checks `/_stcore/health`.
+Stay on `starter`, not `free`: free instances spin down when idle. Starter
+never sleeps, which is the whole reason to pay for it. Render health-checks
+`/_stcore/health`.
