@@ -7,9 +7,6 @@ services:
       context: ..
       dockerfile: backend/Dockerfile
     restart: unless-stopped
-    environment:
-      AUTH_USERNAME: ${AUTH_USERNAME:?set AUTH_USERNAME in backend/.env}
-      AUTH_PASSWORD: ${AUTH_PASSWORD:?set AUTH_PASSWORD in backend/.env}
     expose:
       - "8000"
 

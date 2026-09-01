@@ -1,7 +1,7 @@
 """FastAPI service exposing the vqe/ experiment scripts as a JSON API.
 
 Also serves the built frontend, so the whole app is one container on one origin:
-no CORS, no separate proxy hop, and one set of credentials guarding both.
+no CORS and no separate proxy hop.
 
 Runs as a long-lived process (not serverless): simulators stay cached between
 requests and handlers may take tens of seconds without hitting a timeout.
@@ -9,18 +9,11 @@ requests and handlers may take tens of seconds without hitting a timeout.
 
 from __future__ import annotations
 
-import base64
-import binascii
-import logging
 import math
-import os
-import secrets
 from pathlib import Path
 from typing import Sequence
 
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from . import scenarios as sc
@@ -36,57 +29,10 @@ from .schemas import (
     VqeResponse,
 )
 
-log = logging.getLogger("uvicorn.error")
-
-AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "")
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "")
-AUTH_ENABLED = bool(AUTH_USERNAME and AUTH_PASSWORD)
-
 # Written here by the Docker build; absent when running the API alone in dev.
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "static"
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    if not AUTH_ENABLED:
-        log.warning(
-            "AUTH_USERNAME/AUTH_PASSWORD are not set — this instance is OPEN to "
-            "anyone who can reach it. Set both before exposing it publicly."
-        )
-    yield
-
-
-app = FastAPI(title="VQE Simulation API", version="2.0.0", lifespan=lifespan)
-
-
-def _authorized(header: str | None) -> bool:
-    if not header or not header.startswith("Basic "):
-        return False
-    try:
-        decoded = base64.b64decode(header[6:], validate=True).decode("utf-8")
-    except (binascii.Error, ValueError, UnicodeDecodeError):
-        return False
-    username, separator, password = decoded.partition(":")
-    if not separator:
-        return False
-    # Compare both halves unconditionally so timing does not reveal which failed.
-    valid_user = secrets.compare_digest(username.encode(), AUTH_USERNAME.encode())
-    valid_password = secrets.compare_digest(password.encode(), AUTH_PASSWORD.encode())
-    return valid_user and valid_password
-
-
-@app.middleware("http")
-async def enforce_basic_auth(request: Request, call_next):
-    """Guards the API and the frontend alike — everything except the health check."""
-    if (
-        AUTH_ENABLED
-        and request.url.path != "/api/health"
-        and not _authorized(request.headers.get("authorization"))
-    ):
-        return Response(
-            status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="VQE Explorer"'},
-        )
-    return await call_next(request)
+app = FastAPI(title="VQE Simulation API", version="2.0.0")
 
 
 def get_scenario(scenario_id: str) -> sc.Scenario:

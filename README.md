@@ -8,17 +8,16 @@ Interactive frontend for the VQE experiment scripts in [`vqe/`](vqe/).
   and serves the built frontend.
 - **`frontend/`** — Next.js dashboard, built to static files.
 
-One container serves everything on one origin, so there is no CORS, no proxy hop,
-and one set of credentials guards the UI and the API alike. HTTP basic auth is
-enforced by middleware in front of both; only `/api/health` is public, so the
-platform can health-check without credentials.
+One container serves everything on one origin, so there is no CORS and no proxy
+hop. The app is unauthenticated — everything it exposes is public to anyone who
+can reach it, which is fine for local use but not for an open deployment.
 
 ## Run it locally
 
 Backend (from a venv with `backend/requirements.txt` installed):
 
 ```bash
-cd backend && AUTH_USERNAME=me AUTH_PASSWORD=secret ../.venv/bin/uvicorn app.main:app --port 8000
+cd backend && ../.venv/bin/uvicorn app.main:app --port 8000
 ```
 
 Frontend, with hot reload — it proxies `/api/*` to the backend in dev:
@@ -27,14 +26,10 @@ Frontend, with hot reload — it proxies `/api/*` to the backend in dev:
 cd frontend && npm install && npm run dev
 ```
 
-Leave `AUTH_USERNAME`/`AUTH_PASSWORD` unset for local work and the app runs open,
-logging a warning at startup. The dev proxy cannot answer an auth challenge, so
-set them only when testing auth (via `curl -u`, or the built container).
-
 ## Check the backend
 
-Covers one scenario per calling convention, the auth gate, request validation, and
-the simulator-sharing invariant that keeps memory in budget:
+Covers one scenario per calling convention, request validation, and the
+simulator-sharing invariant that keeps memory in budget:
 
 ```bash
 cd backend && ../.venv/bin/python test_api.py
@@ -50,22 +45,14 @@ in production:
 docker compose up --build
 ```
 
-That serves http://localhost:8000 with no login. To exercise the auth path:
-
-```bash
-AUTH_USERNAME=me AUTH_PASSWORD=secret docker compose up --build
-```
-
-Set `HOST_PORT=8001` if something already holds port 8000. Check the memory
-budget while clicking around with:
+That serves http://localhost:8000. Set `HOST_PORT=8001` if something already
+holds port 8000. Check the memory budget while clicking around with:
 
 ```bash
 docker stats vqe-local --no-stream --format '{{.MemUsage}}'
 ```
 
 ## API
-
-Everything except `GET /api/health` requires the basic-auth credentials.
 
 | Route | Purpose |
 |---|---|

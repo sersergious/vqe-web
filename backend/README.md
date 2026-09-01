@@ -10,15 +10,7 @@ need your credentials.
 
 1. Push this repo to GitHub.
 2. Render dashboard → **New → Blueprint** → pick the repo. It reads `render.yaml`.
-3. It will prompt for `AUTH_USERNAME` and `AUTH_PASSWORD` — they are declared
-   `sync: false`, so they never live in git and the service cannot go live
-   unprotected by accident. Generate a password with:
-
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(24))"
-```
-
-4. First build takes a while (it compiles the frontend, then installs qiskit).
+3. First build takes a while (it compiles the frontend, then installs qiskit).
    Render health-checks `/api/health`, which is deliberately public.
 
 **Stay on the `starter` plan, not `free`.** Free instances spin down when idle,
@@ -35,7 +27,7 @@ switch, and the compose setup below is already there for it.
 Same image, on any box with Docker and a domain pointed at it:
 
 ```bash
-cp backend/.env.example backend/.env   # then fill in AUTH_* and DOMAIN
+cp backend/.env.example backend/.env   # then fill in DOMAIN
 ```
 
 ```bash
@@ -49,7 +41,9 @@ at the host and ports 80/443 are open. Verify with:
 curl https://your-domain.example/api/health
 ```
 
-## Rotating credentials
+## Before exposing it publicly
 
-Change `AUTH_USERNAME`/`AUTH_PASSWORD` and restart. Nothing else caches them —
-the browser will simply prompt again.
+The app has no authentication: every route is open to anyone who can reach it,
+and a request can pin a CPU for ~35s. Put something in front of it — Caddy
+`basic_auth`, an identity-aware proxy, or a private network — before giving it a
+public address.
