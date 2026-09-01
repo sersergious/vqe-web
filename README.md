@@ -62,6 +62,13 @@ docker stats vqe-local --no-stream --format '{{.MemUsage}}'
 | `POST /api/scenarios/{id}/vqe` | Run COBYLA, returns optimal params + iteration history |
 | `POST /api/scenarios/{id}/histogram` | Measurement probabilities, mean ± std over repeated shot batches |
 
+The three sampling routes (`evaluate`, `landscape`, `histogram`) also accept
+`readout_error` — the symmetric measurement bit-flip probability, `0.00`–`0.25`,
+defaulting to the scenario script's own constant — and `seed`, defaulting to a
+value the server draws. Both are echoed in the response, so any figure names the
+settings that produced it and can be regenerated exactly. `vqe` accepts neither:
+it optimizes the exact expectation and never draws shots.
+
 Adding a scenario means adding one entry to `SCENARIOS` in
 [`backend/app/scenarios.py`](backend/app/scenarios.py); the frontend renders its
 sliders from the returned parameter specs with no UI changes.

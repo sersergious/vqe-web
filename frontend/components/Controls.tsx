@@ -29,22 +29,27 @@ export function Slider({
   spec,
   value,
   onChange,
+  step = "any",
+  format = (value: number) => value.toFixed(3),
 }: {
   spec: ParamSpec;
   value: number;
   onChange: (value: number) => void;
+  /** Discrete steps for knobs swept on a fixed grid, e.g. readout error. */
+  step?: number | "any";
+  format?: (value: number) => string;
 }) {
   return (
     <label className="field">
       <span className="field-label">
         {spec.label}
-        <output>{value.toFixed(3)}</output>
+        <output>{format(value)}</output>
       </span>
       <input
         type="range"
         min={spec.min}
         max={spec.max}
-        step="any"
+        step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
       />

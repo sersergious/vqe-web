@@ -13,7 +13,12 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
   return payload as T;
 }
 
-type Body = { coefficient: number | null };
+/** `seed: null` lets the server draw one and report it back. */
+type Body = {
+  coefficient: number | null;
+  readout_error: number;
+  seed: number | null;
+};
 
 export const getScenarios = () => call<Scenario[]>("scenarios");
 

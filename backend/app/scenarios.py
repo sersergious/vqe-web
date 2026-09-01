@@ -11,6 +11,7 @@ so each Scenario declares a `family` and the call_* helpers below branch on it:
 
 from __future__ import annotations
 
+import inspect
 import os
 import sys
 from dataclasses import dataclass
@@ -50,6 +51,9 @@ BITSTRINGS_1Q = ("0", "1")
 BITSTRINGS_2Q = ("00", "01", "10", "11")
 
 TWO_PI = 2.0 * pi
+
+# Aer's seed_simulator is a 32-bit signed value.
+SEED_MAX = 2**31
 
 
 @dataclass(frozen=True)
@@ -232,7 +236,6 @@ SCENARIOS: dict[str, Scenario] = {s.id: s for s in _SCENARIO_LIST}
 @dataclass(frozen=True)
 class Simulators:
     ideal: object
-    noisy: object
     fake: object
 
 
@@ -257,13 +260,53 @@ def _fake_simulator(scenario: Scenario) -> object:
 
 @lru_cache(maxsize=None)
 def simulators(scenario_id: str) -> Simulators:
-    """Built once per scenario — AerSimulator.from_backend(FakeSherbrooke) is slow."""
+    """Built once per scenario — AerSimulator.from_backend(FakeSherbrooke) is slow.
+
+    The noisy simulator is deliberately absent: it depends on the request's
+    readout error, and see noisy_simulator() for why caching it is pointless.
+    """
     scenario = SCENARIOS[scenario_id]
     return Simulators(
         ideal=scenario.module.build_ideal_simulator(),
-        noisy=scenario.module.build_noisy_simulator(),
         fake=_fake_simulator(scenario),
     )
+
+
+def readout_default(scenario: Scenario) -> float:
+    """The script's own constant — what a standalone `python vqe_*.py` run uses.
+
+    Read off the signature rather than restated here, so the nine scripts stay
+    the single source of truth for their own noise parameters.
+    """
+    parameter = inspect.signature(scenario.module.build_noisy_simulator).parameters
+    return float(parameter["readout_p"].default)
+
+
+def noisy_simulator(scenario: Scenario, readout_p: float | None = None):
+    """Rebuilt per call instead of cached.
+
+    Measured at 0.4 ms (1q) / 3.0 ms (2q) against ~300 ms per simulated point,
+    so keying a cache on the readout error would save ~1% and grow without
+    bound. Unlike the fake backends, this allocates no device snapshot.
+    """
+    if readout_p is None:
+        readout_p = readout_default(scenario)
+    return scenario.module.build_noisy_simulator(float(readout_p))
+
+
+def resolve_seed(seed: int | None) -> int:
+    """Every sampling run is seeded, generated here when the caller omits one.
+
+    The value used is echoed in the response, so a figure produced without
+    thinking about seeds is still reproducible after the fact.
+    """
+    return int(np.random.default_rng().integers(SEED_MAX)) if seed is None else int(seed)
+
+
+def _draw(rng) -> int:
+    """A fresh simulator seed per run: reusing one across repetitions would make
+    every repetition identical and collapse the histogram error bars to zero."""
+    return int(rng.integers(SEED_MAX))
 
 
 @lru_cache(maxsize=None)
@@ -305,23 +348,40 @@ def sampled_energy(
     params: Sequence[float],
     simulator,
     coefficient: float | None = None,
+    seed: int | None = None,
 ) -> float:
     packed = _pack(scenario, params)
     if scenario.family == FAMILY_1Q_PAIR_COEFF:
         # These two take the Hamiltonian coefficient as a third positional arg.
-        return float(scenario.module.sampled_expectation(packed, simulator, coefficient))
-    return float(scenario.module.sampled_expectation(packed, simulator))
+        return float(
+            scenario.module.sampled_expectation(
+                packed, simulator, coefficient, seed=seed
+            )
+        )
+    return float(scenario.module.sampled_expectation(packed, simulator, seed=seed))
 
 
 def all_energies(
-    scenario: Scenario, params: Sequence[float], coefficient: float | None = None
+    scenario: Scenario,
+    params: Sequence[float],
+    coefficient: float | None = None,
+    readout_p: float | None = None,
+    seed: int | None = None,
 ) -> dict[str, float]:
+    rng = np.random.default_rng(seed)
     sims = simulators(scenario.id)
+    noisy = noisy_simulator(scenario, readout_p)
     return {
         "exact": exact_energy(scenario, params, coefficient),
-        "ideal_sampled": sampled_energy(scenario, params, sims.ideal, coefficient),
-        "noisy_sampled": sampled_energy(scenario, params, sims.noisy, coefficient),
-        "fake_sampled": sampled_energy(scenario, params, sims.fake, coefficient),
+        "ideal_sampled": sampled_energy(
+            scenario, params, sims.ideal, coefficient, _draw(rng)
+        ),
+        "noisy_sampled": sampled_energy(
+            scenario, params, noisy, coefficient, _draw(rng)
+        ),
+        "fake_sampled": sampled_energy(
+            scenario, params, sims.fake, coefficient, _draw(rng)
+        ),
     }
 
 
@@ -331,6 +391,8 @@ def landscape(
     fixed_params: Sequence[float],
     coefficient: float | None = None,
     n_points: int = 40,
+    readout_p: float | None = None,
+    seed: int | None = None,
 ) -> dict[str, list[float]]:
     """Sweep one parameter over [0, 2π] with the others held at fixed_params."""
     xs = np.linspace(0.0, TWO_PI, n_points)
@@ -341,10 +403,14 @@ def landscape(
         "noisy_sampled": [],
         "fake_sampled": [],
     }
+    # One stream for the whole sweep: each point draws its own seed from it, so
+    # the curve is reproducible end to end without any two points sharing draws.
+    rng = np.random.default_rng(seed)
     working = list(fixed_params)
     for x in xs:
         working[sweep_index] = float(x)
-        for key, value in all_energies(scenario, working, coefficient).items():
+        point = all_energies(scenario, working, coefficient, readout_p, _draw(rng))
+        for key, value in point.items():
             series[key].append(value)
     return series
 
@@ -382,7 +448,11 @@ def run_vqe(
 
 
 def histogram(
-    scenario: Scenario, params: Sequence[float], coefficient: float | None = None
+    scenario: Scenario,
+    params: Sequence[float],
+    coefficient: float | None = None,
+    readout_p: float | None = None,
+    seed: int | None = None,
 ) -> dict:
     """Measurement-outcome probabilities: exact plus mean/std over repeated shot runs.
 
@@ -391,8 +461,9 @@ def histogram(
     """
     ansatz, ctx = _prepare(scenario, coefficient)
     sims = simulators(scenario.id)
+    noisy = noisy_simulator(scenario, readout_p)
     data = scenario.module.build_histogram_data(
-        _pack(scenario, params), sims.ideal, sims.noisy, sims.fake, ansatz, ctx
+        _pack(scenario, params), sims.ideal, noisy, sims.fake, ansatz, ctx, seed=seed
     )
 
     if scenario.family == FAMILY_2Q:

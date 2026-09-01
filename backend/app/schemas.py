@@ -27,19 +27,40 @@ class ScenarioOut(BaseModel):
     true_ground_energy: float
 
 
-class EvaluateRequest(BaseModel):
+class SamplingRequest(BaseModel):
+    """Fields shared by every endpoint that draws shots.
+
+    readout_error is the symmetric measurement bit-flip probability, capped at
+    the 0.25 top of the 5/10/15/20% grid the noise study sweeps; None keeps
+    whichever value the scenario's own script declares. seed is the simulator
+    seed; None means the server draws one and echoes it back.
+    """
+
+    readout_error: float | None = Field(default=None, ge=0.0, le=0.25)
+    seed: int | None = Field(default=None, ge=0, lt=2**31)
+
+
+class SamplingResponse(BaseModel):
+    """The settings a result was actually produced with, so any figure taken
+    from it can be regenerated exactly."""
+
+    readout_error: float
+    seed: int
+
+
+class EvaluateRequest(SamplingRequest):
     params: list[float] = Field(min_length=1, max_length=8)
     coefficient: float | None = None
 
 
-class EvaluateResponse(BaseModel):
+class EvaluateResponse(SamplingResponse):
     exact: float
     ideal_sampled: float
     noisy_sampled: float
     fake_sampled: float
 
 
-class LandscapeRequest(BaseModel):
+class LandscapeRequest(SamplingRequest):
     sweep_param_index: int = Field(default=0, ge=0, le=7)
     fixed_params: list[float] = Field(min_length=1, max_length=8)
     coefficient: float | None = None
@@ -49,7 +70,7 @@ class LandscapeRequest(BaseModel):
     n_points: int = Field(default=24, ge=4, le=120)
 
 
-class LandscapeResponse(BaseModel):
+class LandscapeResponse(SamplingResponse):
     x: list[float]
     exact: list[float]
     ideal_sampled: list[float]
@@ -75,7 +96,7 @@ class VqeResponse(BaseModel):
     history: list[HistoryPoint]
 
 
-class HistogramRequest(BaseModel):
+class HistogramRequest(SamplingRequest):
     params: list[float] = Field(min_length=1, max_length=8)
     coefficient: float | None = None
 
@@ -85,7 +106,7 @@ class SampledProbs(BaseModel):
     std: list[float]
 
 
-class HistogramResponse(BaseModel):
+class HistogramResponse(SamplingResponse):
     bitstrings: list[str]
     exact: list[float]
     ideal: SampledProbs

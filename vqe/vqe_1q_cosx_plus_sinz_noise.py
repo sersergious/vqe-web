@@ -69,7 +69,7 @@ def build_ideal_simulator():
     return AerSimulator()
 
 
-def build_noisy_simulator():
+def build_noisy_simulator(readout_p=0.02):
     """AerSimulator with a manually constructed noise model
     emulating a typical superconducting qubit device."""
     noise_model = NoiseModel()
@@ -84,7 +84,9 @@ def build_noisy_simulator():
         combined_error, ["rx", "ry", "rz", "h", "sdg"]
     )
 
-    readout_error = ReadoutError([[0.98, 0.02], [0.02, 0.98]])
+    readout_error = ReadoutError(
+        [[1 - readout_p, readout_p], [readout_p, 1 - readout_p]]
+    )
     noise_model.add_all_qubit_readout_error(readout_error)
 
     return AerSimulator(noise_model=noise_model)
@@ -110,7 +112,7 @@ def exact_expectation(params, ansatz, hamiltonian):
     return job.result()[0].data.evs.real
 
 
-def sampled_expectation(params, simulator, alpha, n_samples=1000):
+def sampled_expectation(params, simulator, alpha, n_samples=1000, seed=None):
     """Sampled <H> = cos(alpha)*<X> + sin(alpha)*<Z> via two circuit runs."""
     theta, phi = params
 
@@ -120,7 +122,11 @@ def sampled_expectation(params, simulator, alpha, n_samples=1000):
     qc_z.rz(phi, 0)
     qc_z.measure(0, 0)
     compiled_z = transpile(qc_z, simulator)
-    counts_z = simulator.run(compiled_z, shots=n_samples).result().get_counts()
+    counts_z = (
+        simulator.run(compiled_z, shots=n_samples, seed_simulator=seed)
+        .result()
+        .get_counts()
+    )
     exp_z = (counts_z.get("0", 0) - counts_z.get("1", 0)) / n_samples
 
     # --- Measure <X> (H rotates X eigenbasis to Z eigenbasis) ---
@@ -130,7 +136,12 @@ def sampled_expectation(params, simulator, alpha, n_samples=1000):
     qc_x.h(0)
     qc_x.measure(0, 0)
     compiled_x = transpile(qc_x, simulator)
-    counts_x = simulator.run(compiled_x, shots=n_samples).result().get_counts()
+    seed_x = None if seed is None else seed + 1
+    counts_x = (
+        simulator.run(compiled_x, shots=n_samples, seed_simulator=seed_x)
+        .result()
+        .get_counts()
+    )
     exp_x = (counts_x.get("0", 0) - counts_x.get("1", 0)) / n_samples
 
     return np.cos(alpha) * exp_x + np.sin(alpha) * exp_z
@@ -257,10 +268,17 @@ def plot_convergence(history, optimal_energy):
 
 
 def build_histogram_data(
-    params, ideal_simulator, noisy_simulator, fake_simulator, ansatz, hamiltonian
+    params,
+    ideal_simulator,
+    noisy_simulator,
+    fake_simulator,
+    ansatz,
+    hamiltonian,
+    seed=None,
 ):
     """Compute probabilities and statistics for histogram figures (Z basis)."""
     n_shots, n_repetitions = 1000, 20
+    rng = np.random.default_rng(seed)
     theta, phi = params
 
     # Exact Z-basis probabilities from statevector
@@ -279,8 +297,12 @@ def build_histogram_data(
     def repeated_probs(simulator):
         p0s, p1s = [], []
         compiled = transpile(qc, simulator)
-        for _ in range(n_repetitions):
-            counts = simulator.run(compiled, shots=n_shots).result().get_counts()
+        for rep_seed in rng.integers(2**31, size=n_repetitions):
+            counts = (
+                simulator.run(compiled, shots=n_shots, seed_simulator=int(rep_seed))
+                .result()
+                .get_counts()
+            )
             counts.setdefault("0", 0)
             counts.setdefault("1", 0)
             total = sum(counts.values())

@@ -14,6 +14,10 @@ export default function Page() {
   const [coefficient, setCoefficient] = useState<number | null>(null);
   const [sweepIndex, setSweepIndex] = useState(0);
   const [nPoints, setNPoints] = useState(24);
+  // 5% steps: the grid the readout-noise study sweeps (5/10/15/20%).
+  const [readoutError, setReadoutError] = useState(0.05);
+  // Empty means "let the server draw one"; it comes back in every response.
+  const [seed, setSeed] = useState("");
 
   const [energies, setEnergies] = useState<Energies | null>(null);
   const [landscape, setLandscape] = useState<Landscape | null>(null);
@@ -74,7 +78,11 @@ export default function Page() {
     );
   }
 
-  const body = { coefficient };
+  const body = {
+    coefficient,
+    readout_error: readoutError,
+    seed: seed === "" ? null : Number(seed),
+  };
   const disabled = busy !== null;
 
   return (
@@ -109,6 +117,31 @@ export default function Page() {
 
           <h2>Ansatz parameters</h2>
           <ParamSliders specs={scenario.params} values={params} onChange={setParams} />
+
+          <h2>Noise</h2>
+          <Slider
+            spec={{
+              name: "readout_error",
+              label: "Readout error",
+              default: 0.05,
+              min: 0,
+              max: 0.25,
+            }}
+            value={readoutError}
+            onChange={setReadoutError}
+            step={0.05}
+            format={(value) => `${Math.round(value * 100)}%`}
+          />
+          <label className="field">
+            <span className="field-label">Seed</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="auto"
+              value={seed}
+              onChange={(event) => setSeed(event.target.value)}
+            />
+          </label>
 
           <h2>Sweep</h2>
           <label className="field">
@@ -239,6 +272,18 @@ export default function Page() {
           {histogram && (
             <div className="card">
               <HistogramChart data={histogram} />
+              <div className="row">
+                <span className="muted">
+                  leakage into |{histogram.bitstrings[0]}⟩ — noisy{" "}
+                  {(histogram.noisy.mean[0] * 100).toFixed(1)}% · fake{" "}
+                  {(histogram.fake.mean[0] * 100).toFixed(1)}% · readout{" "}
+                  {Math.round(histogram.readout_error * 100)}% · seed{" "}
+                  {histogram.seed}
+                </span>
+                <button onClick={() => setSeed(String(histogram.seed))}>
+                  Pin seed
+                </button>
+              </div>
             </div>
           )}
 

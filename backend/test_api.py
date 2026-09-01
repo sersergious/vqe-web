@@ -59,6 +59,47 @@ def test_fake_simulators_are_shared():
     assert len(sc._FAKE_SIMULATORS) == 2, sc._FAKE_SIMULATORS.keys()
 
 
+def test_readout_error_and_seed():
+    """The readout knob must move the noisy series, and only the noisy series.
+
+    The seed guard matters most: handing one seed to all 20 repetitions would
+    make them identical and silently collapse every error bar to zero.
+    """
+
+    def hist(**extra):
+        return client.post(
+            "/api/scenarios/1q_z/histogram",
+            json={"params": [3.14159265], **extra},
+        ).json()
+
+    quiet, loud = hist(readout_error=0.0, seed=3), hist(readout_error=0.25, seed=3)
+    assert loud["noisy"]["mean"][0] > quiet["noisy"]["mean"][0] + 0.2, (
+        f"readout error did not move the noisy series: "
+        f"{quiet['noisy']['mean'][0]} -> {loud['noisy']['mean'][0]}"
+    )
+    assert quiet["fake"]["mean"] == loud["fake"]["mean"], (
+        "readout error leaked into the fake backend, which must stay a device snapshot"
+    )
+
+    seeded = hist(readout_error=0.15, seed=7)
+    assert seeded == hist(readout_error=0.15, seed=7), "same seed gave a different result"
+    assert seeded["readout_error"] == 0.15 and seeded["seed"] == 7, seeded
+
+    # Not "ideal": at theta = pi the noiseless state is exactly |1>, so every
+    # shot agrees and its std is legitimately 0, seeded or not.
+    for series in ("noisy", "fake"):
+        assert all(std > 0 for std in seeded[series]["std"]), (
+            f"{series} error bars collapsed: seeding must not make the "
+            f"repetitions identical ({seeded[series]['std']})"
+        )
+
+    # An omitted seed is still reported, so the run can be repeated afterwards.
+    drawn = hist(readout_error=0.05)["seed"]
+    assert isinstance(drawn, int) and drawn >= 0, drawn
+    # An omitted readout error falls back to the script's own constant.
+    assert hist()["readout_error"] == 0.20, hist()["readout_error"]
+
+
 def check(scenario_id, spec):
     defaults = [p["default"] for p in spec["params"]]
     coefficient = spec["coefficient"]["default"] if spec["coefficient"] else None
@@ -109,7 +150,8 @@ if __name__ == "__main__":
     by_id = test_scenarios()
     test_validation()
     test_fake_simulators_are_shared()
-    print("metadata + validation + simulator sharing OK\n")
+    test_readout_error_and_seed()
+    print("metadata + validation + simulator sharing + readout/seed OK\n")
     for scenario_id in CASES:
         check(scenario_id, by_id[scenario_id])
     print("\nAll checks passed.")

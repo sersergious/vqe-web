@@ -13,6 +13,11 @@ const COLORS = {
 
 const GRID = { gridcolor: "#2c333d", zerolinecolor: "#2c333d" };
 
+/** Every noisy series names the readout error it was drawn at, so a saved plot
+ *  is self-describing. */
+const readoutLabel = (readoutError: number) =>
+  `readout ${Math.round(readoutError * 100)}%`;
+
 export function LandscapeChart({
   data,
   scenario,
@@ -37,7 +42,11 @@ export function LandscapeChart({
       data={[
         line(data.exact, "Exact (statevector)", COLORS.exact, true),
         line(data.ideal_sampled, "Sampled — ideal", COLORS.ideal),
-        line(data.noisy_sampled, "Sampled — noisy", COLORS.noisy),
+        line(
+          data.noisy_sampled,
+          `Sampled — noisy (${readoutLabel(data.readout_error)})`,
+          COLORS.noisy,
+        ),
         line(data.fake_sampled, "Sampled — fake backend", COLORS.fake),
       ]}
       layout={{
@@ -130,7 +139,12 @@ export function HistogramChart({ data }: { data: Histogram }) {
       data={[
         bar(data.exact, "Exact (statevector)", COLORS.exact),
         bar(data.ideal.mean, "Ideal", COLORS.ideal, data.ideal.std),
-        bar(data.noisy.mean, "Noisy", COLORS.noisy, data.noisy.std),
+        bar(
+          data.noisy.mean,
+          `Noisy — ${readoutLabel(data.readout_error)}`,
+          COLORS.noisy,
+          data.noisy.std,
+        ),
         bar(data.fake.mean, "Fake backend", COLORS.fake, data.fake.std),
       ]}
       layout={{

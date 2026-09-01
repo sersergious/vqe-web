@@ -16,14 +16,23 @@ export type Scenario = {
   true_ground_energy: number;
 };
 
-export type Energies = {
+/** The shot-noise settings a result was produced with, echoed by the API so a
+ *  figure can be regenerated exactly. */
+export type Sampling = {
+  readout_error: number;
+  seed: number;
+};
+
+export type Energies = Sampling & {
   exact: number;
   ideal_sampled: number;
   noisy_sampled: number;
   fake_sampled: number;
 };
 
-export type Landscape = { x: number[] } & Record<keyof Energies, number[]>;
+type EnergySeries = "exact" | "ideal_sampled" | "noisy_sampled" | "fake_sampled";
+
+export type Landscape = Sampling & { x: number[] } & Record<EnergySeries, number[]>;
 
 export type VqeResult = {
   optimal_params: number[];
@@ -35,7 +44,7 @@ export type VqeResult = {
 
 export type SampledProbs = { mean: number[]; std: number[] };
 
-export type Histogram = {
+export type Histogram = Sampling & {
   bitstrings: string[];
   exact: number[];
   ideal: SampledProbs;

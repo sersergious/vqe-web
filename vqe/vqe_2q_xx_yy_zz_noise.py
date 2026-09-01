@@ -119,7 +119,7 @@ def build_ideal_simulator():
     return AerSimulator()
 
 
-def build_noisy_simulator():
+def build_noisy_simulator(readout_p=0.02):
     """
     AerSimulator with manually constructed noise model.
     Single-qubit gates: depolarizing (p=0.005) + thermal relaxation.
@@ -143,7 +143,9 @@ def build_noisy_simulator():
     err_2q = dep_2q.compose(therm_2q)
     noise_model.add_all_qubit_quantum_error(err_2q, ["cx"])
 
-    readout_error = ReadoutError([[0.98, 0.02], [0.02, 0.98]])
+    readout_error = ReadoutError(
+        [[1 - readout_p, readout_p], [readout_p, 1 - readout_p]]
+    )
     noise_model.add_all_qubit_readout_error(readout_error)
 
     return AerSimulator(noise_model=noise_model)
@@ -234,7 +236,7 @@ def _circuit_yy(param_vals):
     return qc
 
 
-def sampled_expectation(param_vals, simulator, n_shots=2000):
+def sampled_expectation(param_vals, simulator, n_shots=2000, seed=None):
     """
     <XX + YY + ZZ> from shot-based sampling using three circuits,
     one per Pauli term, each measuring in the appropriate rotated basis.
@@ -245,7 +247,7 @@ def sampled_expectation(param_vals, simulator, n_shots=2000):
         _circuit_zz(param_vals),
     ]
     compiled = transpile(circuits, simulator)
-    results = simulator.run(compiled, shots=n_shots).result()
+    results = simulator.run(compiled, shots=n_shots, seed_simulator=seed).result()
 
     exp_xx = _parity(results.get_counts(0), n_shots)
     exp_yy = _parity(results.get_counts(1), n_shots)
@@ -436,7 +438,7 @@ def _exact_probs(param_vals, ansatz, param_list):
     return {bs: probs.get(bs, 0.0) for bs in BITSTRINGS}
 
 
-def _sampled_probs(param_vals, simulator, n_shots, n_reps):
+def _sampled_probs(param_vals, simulator, n_shots, n_reps, rng):
     """
     Repeated shot-based Z-basis probabilities.
     Returns mean and std dicts over n_reps repetitions.
@@ -449,8 +451,12 @@ def _sampled_probs(param_vals, simulator, n_shots, n_reps):
     compiled = transpile(qc, simulator)
     runs = {bs: [] for bs in BITSTRINGS}
 
-    for _ in range(n_reps):
-        counts = simulator.run(compiled, shots=n_shots).result().get_counts()
+    for rep_seed in rng.integers(2**31, size=n_reps):
+        counts = (
+            simulator.run(compiled, shots=n_shots, seed_simulator=int(rep_seed))
+            .result()
+            .get_counts()
+        )
         total = sum(counts.values())
         for bs in BITSTRINGS:
             runs[bs].append(counts.get(bs, 0) / total)
@@ -469,11 +475,19 @@ def build_histogram_data(
     param_list,
     n_shots=2000,
     n_reps=20,
+    seed=None,
 ):
+    rng = np.random.default_rng(seed)
     p_exact = _exact_probs(param_vals, ansatz, param_list)
-    p_ideal_mean, p_ideal_std = _sampled_probs(param_vals, ideal_sim, n_shots, n_reps)
-    p_noisy_mean, p_noisy_std = _sampled_probs(param_vals, noisy_sim, n_shots, n_reps)
-    p_fake_mean, p_fake_std = _sampled_probs(param_vals, fake_sim, n_shots, n_reps)
+    p_ideal_mean, p_ideal_std = _sampled_probs(
+        param_vals, ideal_sim, n_shots, n_reps, rng
+    )
+    p_noisy_mean, p_noisy_std = _sampled_probs(
+        param_vals, noisy_sim, n_shots, n_reps, rng
+    )
+    p_fake_mean, p_fake_std = _sampled_probs(
+        param_vals, fake_sim, n_shots, n_reps, rng
+    )
 
     return HistogramData(
         p_exact,

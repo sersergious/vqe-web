@@ -24,6 +24,7 @@ from .schemas import (
     HistogramResponse,
     LandscapeRequest,
     LandscapeResponse,
+    SamplingRequest,
     ScenarioOut,
     VqeRequest,
     VqeResponse,
@@ -69,6 +70,23 @@ def validate(
     return value
 
 
+def sampling(scenario: sc.Scenario, body: SamplingRequest) -> dict[str, float | int]:
+    """Resolve the shot-noise settings a response has to echo back.
+
+    An omitted readout error falls back to the scenario script's own constant,
+    and an omitted seed is drawn here — so every response names the exact
+    settings that produced it and the run can be repeated.
+    """
+    return {
+        "readout_error": (
+            sc.readout_default(scenario)
+            if body.readout_error is None
+            else float(body.readout_error)
+        ),
+        "seed": sc.resolve_seed(body.seed),
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -96,7 +114,17 @@ def list_scenarios() -> list[dict]:
 def evaluate(scenario_id: str, body: EvaluateRequest) -> dict:
     scenario = get_scenario(scenario_id)
     coefficient = validate(scenario, body.params, body.coefficient)
-    return sc.all_energies(scenario, body.params, coefficient)
+    options = sampling(scenario, body)
+    return {
+        **sc.all_energies(
+            scenario,
+            body.params,
+            coefficient,
+            options["readout_error"],
+            options["seed"],
+        ),
+        **options,
+    }
 
 
 @app.post("/api/scenarios/{scenario_id}/landscape", response_model=LandscapeResponse)
@@ -108,13 +136,19 @@ def landscape(scenario_id: str, body: LandscapeRequest) -> dict:
             status_code=422,
             detail=f"sweep_param_index out of range for scenario '{scenario.id}'",
         )
-    return sc.landscape(
-        scenario,
-        body.sweep_param_index,
-        body.fixed_params,
-        coefficient,
-        body.n_points,
-    )
+    options = sampling(scenario, body)
+    return {
+        **sc.landscape(
+            scenario,
+            body.sweep_param_index,
+            body.fixed_params,
+            coefficient,
+            body.n_points,
+            options["readout_error"],
+            options["seed"],
+        ),
+        **options,
+    }
 
 
 @app.post("/api/scenarios/{scenario_id}/vqe", response_model=VqeResponse)
@@ -128,7 +162,17 @@ def vqe(scenario_id: str, body: VqeRequest) -> dict:
 def histogram(scenario_id: str, body: HistogramRequest) -> dict:
     scenario = get_scenario(scenario_id)
     coefficient = validate(scenario, body.params, body.coefficient)
-    return sc.histogram(scenario, body.params, coefficient)
+    options = sampling(scenario, body)
+    return {
+        **sc.histogram(
+            scenario,
+            body.params,
+            coefficient,
+            options["readout_error"],
+            options["seed"],
+        ),
+        **options,
+    }
 
 
 # Mounted last: this catches every path the API routes above did not claim.

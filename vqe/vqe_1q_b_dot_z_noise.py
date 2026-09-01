@@ -66,7 +66,7 @@ def build_ideal_simulator():
     return AerSimulator()
 
 
-def build_noisy_simulator():
+def build_noisy_simulator(readout_p=0.02):
     """AerSimulator with a manually constructed noise model
     emulating a typical superconducting qubit device."""
     noise_model = NoiseModel()
@@ -81,7 +81,9 @@ def build_noisy_simulator():
         combined_error, ["rx", "ry", "rz", "h", "sdg"]
     )
 
-    readout_error = ReadoutError([[0.98, 0.02], [0.02, 0.98]])
+    readout_error = ReadoutError(
+        [[1 - readout_p, readout_p], [readout_p, 1 - readout_p]]
+    )
     noise_model.add_all_qubit_readout_error(readout_error)
 
     return AerSimulator(noise_model=noise_model)
@@ -107,7 +109,7 @@ def exact_expectation(params, ansatz, hamiltonian):
     return job.result()[0].data.evs.real
 
 
-def sampled_expectation(params, simulator, B, n_samples=1000):
+def sampled_expectation(params, simulator, B, n_samples=1000, seed=None):
     """Sampled <H> = -B * <Z> via a single circuit run."""
     theta, phi = params
 
@@ -116,7 +118,11 @@ def sampled_expectation(params, simulator, B, n_samples=1000):
     qc.rz(phi, 0)
     qc.measure(0, 0)
     compiled = transpile(qc, simulator)
-    counts = simulator.run(compiled, shots=n_samples).result().get_counts()
+    counts = (
+        simulator.run(compiled, shots=n_samples, seed_simulator=seed)
+        .result()
+        .get_counts()
+    )
     exp_z = (counts.get("0", 0) - counts.get("1", 0)) / n_samples
 
     return -B * exp_z
@@ -248,10 +254,17 @@ def plot_convergence(history, optimal_energy, B):
 
 
 def build_histogram_data(
-    params, ideal_simulator, noisy_simulator, fake_simulator, ansatz, hamiltonian
+    params,
+    ideal_simulator,
+    noisy_simulator,
+    fake_simulator,
+    ansatz,
+    hamiltonian,
+    seed=None,
 ):
     """Compute probabilities and statistics for histogram figures (Z basis)."""
     n_shots, n_repetitions = 1000, 20
+    rng = np.random.default_rng(seed)
     theta, phi = params
 
     # Exact Z-basis probabilities from statevector
@@ -270,8 +283,12 @@ def build_histogram_data(
     def repeated_probs(simulator):
         p0s, p1s = [], []
         compiled = transpile(qc, simulator)
-        for _ in range(n_repetitions):
-            counts = simulator.run(compiled, shots=n_shots).result().get_counts()
+        for rep_seed in rng.integers(2**31, size=n_repetitions):
+            counts = (
+                simulator.run(compiled, shots=n_shots, seed_simulator=int(rep_seed))
+                .result()
+                .get_counts()
+            )
             counts.setdefault("0", 0)
             counts.setdefault("1", 0)
             total = sum(counts.values())
