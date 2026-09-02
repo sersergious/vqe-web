@@ -44,8 +44,8 @@ def test_fake_simulators_are_shared():
     """Each fake device must be built once, not once per scenario.
 
     A FakeSherbrooke-backed AerSimulator costs ~58 MB and Aer does not release
-    it, so building one per scenario is the difference between fitting a 512 MB
-    instance and being OOM-killed.
+    it, so building one per scenario would add a few hundred MB that nothing
+    can reclaim for the rest of the process's life.
     """
     from app import scenarios as sc
 

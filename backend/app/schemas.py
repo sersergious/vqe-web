@@ -66,7 +66,7 @@ class LandscapeRequest(SamplingRequest):
     coefficient: float | None = None
     # Every point costs four simulator runs. 24 keeps the heaviest scenario
     # (2q_xx_yy_zz, ~0.3s/point) under ~7s; the cap stops one request from
-    # pinning the VPS CPU.
+    # pinning the CPU for minutes.
     n_points: int = Field(default=24, ge=4, le=120)
 
 

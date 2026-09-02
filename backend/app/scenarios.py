@@ -22,7 +22,7 @@ from types import ModuleType
 from typing import Callable, Sequence
 
 # The scripts import matplotlib.pyplot at module scope; pin a headless backend
-# before that happens so importing them works inside a container.
+# before that happens so importing them never tries to open a window.
 os.environ.setdefault("MPLBACKEND", "Agg")
 
 # Make the repo root importable so `vqe.*` resolves when uvicorn runs from backend/.

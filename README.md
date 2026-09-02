@@ -1,18 +1,16 @@
 # VQE Explorer
 
-Interactive frontend for the VQE experiment scripts in [`vqe/`](vqe/).
+Interactive frontend for the VQE experiment scripts in [`vqe/`](vqe/). Runs
+locally only — there is no deployment, and no authentication on any route.
 
-- **`vqe/`** — the original experiment scripts, **unmodified**. They remain runnable
-  standalone (`python vqe/vqe_1q_z_noise.py` still writes its PNGs).
-- **`backend/`** — FastAPI service that imports those scripts, exposes them as JSON,
-  and serves the built frontend.
-- **`frontend/`** — Next.js dashboard, built to static files.
+- **`vqe/`** — the experiment scripts. They remain runnable standalone
+  (`python vqe/vqe_1q_z_noise.py` still writes its PNGs) and stay the single
+  source of truth for their own noise parameters.
+- **`backend/`** — FastAPI service that imports those scripts and exposes them
+  as JSON.
+- **`frontend/`** — Next.js dashboard.
 
-One container serves everything on one origin, so there is no CORS and no proxy
-hop. The app is unauthenticated — everything it exposes is public to anyone who
-can reach it, which is fine for local use but not for an open deployment.
-
-## Run it locally
+## Run it
 
 Backend (from a venv with `backend/requirements.txt` installed):
 
@@ -26,30 +24,25 @@ Frontend, with hot reload — it proxies `/api/*` to the backend in dev:
 cd frontend && npm install && npm run dev
 ```
 
+That serves <http://localhost:3000>.
+
+To serve both from one origin instead, build the frontend to static files and
+drop them where the backend looks:
+
+```bash
+cd frontend && npm run build && cp -r out ../backend/static
+```
+
+The backend then serves the dashboard itself at <http://localhost:8000>, and the
+dev proxy is no longer involved.
+
 ## Check the backend
 
-Covers one scenario per calling convention, request validation, and the
-simulator-sharing invariant that keeps memory in budget:
+Covers one scenario per calling convention, request validation, the readout
+error and seed controls, and the simulator-sharing invariant below:
 
 ```bash
 cd backend && ../.venv/bin/python test_api.py
-```
-
-## Run the real thing
-
-[`docker-compose.yml`](docker-compose.yml) runs the production image exactly as
-Render will, including a 512 MB cap so a memory regression fails here rather than
-in production:
-
-```bash
-docker compose up --build
-```
-
-That serves http://localhost:8000. Set `HOST_PORT=8001` if something already
-holds port 8000. Check the memory budget while clicking around with:
-
-```bash
-docker stats vqe-local --no-stream --format '{{.MemUsage}}'
 ```
 
 ## API
@@ -75,7 +68,7 @@ sliders from the returned parameter specs with no UI changes.
 
 ## Performance notes
 
-Measured in the container, 1–2 qubit scenarios:
+Measured on 1–2 qubit scenarios:
 
 | | |
 |---|---|
@@ -90,12 +83,10 @@ Two things follow from this, and both are load-bearing:
 
 - **Fake-backend simulators are shared across scenarios.** One
   `AerSimulator.from_backend(FakeSherbrooke)` costs ~58 MB, and Aer does not
-  return that memory when released — so building one per scenario OOM-kills a
-  512 MB instance and no eviction policy can save it. `test_api.py` asserts only
-  two ever get built.
-- **Requests are synchronous and can take ~35s.** That rules out serverless
-  hosting; this needs a long-lived process.
-
-## Deploying
-
-See [`backend/README.md`](backend/README.md).
+  return that memory when released — so building one per scenario would add a
+  few hundred MB that nothing can reclaim. `test_api.py` asserts only two ever
+  get built.
+- **The noisy simulator is not cached.** It depends on the request's readout
+  error, and rebuilding it costs 0.4 ms (1q) / 3.0 ms (2q) against ~300 ms per
+  simulated point — so a cache keyed on the readout error would save ~1% and
+  grow without bound.

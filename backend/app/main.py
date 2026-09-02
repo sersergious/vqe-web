@@ -1,10 +1,11 @@
 """FastAPI service exposing the vqe/ experiment scripts as a JSON API.
 
-Also serves the built frontend, so the whole app is one container on one origin:
-no CORS and no separate proxy hop.
+Will also serve the frontend if it has been built into backend/static, putting
+the API and the page on one origin; otherwise the Next.js dev server proxies
+/api/* here instead.
 
-Runs as a long-lived process (not serverless): simulators stay cached between
-requests and handlers may take tens of seconds without hitting a timeout.
+Simulators are cached in-process between requests, and a handler may take tens
+of seconds — a landscape sweep runs four simulators at every point.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from .schemas import (
     VqeResponse,
 )
 
-# Written here by the Docker build; absent when running the API alone in dev.
+# Present only after `npm run build` is copied here; absent in the usual dev setup.
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "static"
 
 app = FastAPI(title="VQE Simulation API", version="2.0.0")
