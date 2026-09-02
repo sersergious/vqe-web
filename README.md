@@ -1,7 +1,7 @@
 # VQE Explorer
 
 Interactive frontend for the VQE experiment scripts in [`vqe/`](vqe/). Runs
-locally only — there is no deployment, and no authentication on any route.
+locally only.
 
 - **`vqe/`** — the experiment scripts. They remain runnable standalone
   (`python vqe/vqe_1q_z_noise.py` still writes its PNGs) and stay the single
